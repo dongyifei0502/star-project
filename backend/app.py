@@ -1,5 +1,11 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import sys
+import os
+
+# 添加数据库模块的路径
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from database.db import save_record, get_stats
 
 app = Flask(__name__)
 CORS(app)
@@ -9,21 +15,7 @@ def transform():
     data = request.get_json()
     text = data.get('text', '')
     
-    # 如果 text 是 bytes，解码成字符串
-    if isinstance(text, bytes):
-        text = text.decode('utf-8')
-    
-    print(f"收到文字原始类型: {type(text)}")
-    print(f"收到文字: {text}")
-    print(f"文字repr: {repr(text)}")
-    
-    # 尝试多种判断方式
-    has_fan = '烦' in text
-    has_fan2 = '烦' in str(text)
-    
-    print(f"直接判断'烦' in text: {has_fan}")
-    print(f"str判断: {has_fan2}")
-    
+    # 关键词匹配规则
     if '烦' in text:
         positive = "烦心事是成长的信号，你在前进"
         emotion = "sad"
@@ -40,9 +32,30 @@ def transform():
         positive = "你的感受很重要，宇宙在倾听"
         emotion = "neutral"
     
-    print(f"返回: {positive} / {emotion}")
+    # 保存记录到数据库
+    try:
+        save_record(text, positive, emotion)
+        print(f"已保存记录: {text} -> {positive}")
+    except Exception as e:
+        print(f"保存记录失败: {e}")
     
-    return jsonify({'positive': positive, 'emotion': emotion})
+    return jsonify({
+        'positive': positive,
+        'emotion': emotion
+    })
+
+@app.route('/api/records', methods=['GET'])
+def get_records():
+    """获取所有情绪记录（用于数据看板）"""
+    from database.db import get_all_records
+    records = get_all_records()
+    return jsonify({'records': records})
+
+@app.route('/api/stats', methods=['GET'])
+def get_statistics():
+    """获取情绪统计（用于数据看板）"""
+    stats = get_stats()
+    return jsonify({'stats': stats})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
